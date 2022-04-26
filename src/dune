@@ -1,5 +1,7 @@
 (library
  (name wasmer)
+ (public_name wasmer)
+ (no_dynlink)
  (foreign_archives ocaml_wasmer))
 
 (rule
