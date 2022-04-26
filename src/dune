@@ -1,2 +1,11 @@
 (library
- (name ocaml_wasmer))
+ (name wasmer)
+ (foreign_archives ocaml_wasmer))
+
+(rule
+ (deps (glob_files *.rs))
+ (targets libocaml_wasmer.a)
+ (action
+  (progn
+    (run cargo build)
+    (run cp %{project_root}/../../target/debug/libocaml_wasmer.a ./))))
