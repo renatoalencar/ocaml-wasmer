@@ -1,5 +1,5 @@
 use std::path::{Path};
-use wasmer::{Store, Module, imports, Instance, Exports, Function};
+use wasmer::{Store, Module, Instance, Exports, Function, ImportObject};
 
 unsafe extern "C" fn finalizer<T>(value: ocaml::Raw) {
     value.as_pointer::<T>().drop_in_place()
@@ -27,9 +27,9 @@ pub fn make_module_from_file(store: ocaml::Pointer<Store>, filename: String) -> 
 }
 
 #[ocaml::func]
-pub fn make_instance(module: ocaml::Pointer<Module>) -> ocaml::Pointer<'static, Instance> {
+pub fn make_instance(import_object: ocaml::Pointer<ImportObject>, module: ocaml::Pointer<Module>) -> ocaml::Pointer<'static, Instance> {
     let module = module.as_ref();
-    let import_object = imports! {};
+    let import_object = import_object.as_ref();
 
     let instance = Instance::new(&module, &import_object).expect("Could not create instance");
     ocaml::Pointer::alloc_final(instance, Some(finalizer::<Instance>), None)
@@ -88,7 +88,7 @@ impl From<&wasmer::Value> for Value {
 pub fn call(function: ocaml::Pointer<Function>, params: ocaml::List<Value>) -> ocaml::List<'static, Value> {
     let params: Vec<wasmer::Value> =
         params
-            .into_vec()
+            .into_vec() // TODO: `ListIterator` does not provide proper variable types
             .into_iter()
             .map(|value| value.into())
             .collect();
@@ -104,6 +104,129 @@ pub fn call(function: ocaml::Pointer<Function>, params: ocaml::List<Value>) -> o
         .map(|value| value.into())
         .fold(
             ocaml::List::empty(),
+            // TODO: Better ways to convert iterators to OCaml lists.
             |list, item| unsafe { list.add(gc, item) }
         )
+}
+
+#[ocaml::func]
+pub fn make_imports() -> ocaml::Pointer<ImportObject> {
+    let imports = ImportObject::new();
+    ocaml::Pointer::alloc_final(imports, Some(finalizer::<ImportObject>), None)
+}
+
+#[ocaml::func]
+pub fn register_export_object(imports: ocaml::Raw, name: String, exports: ocaml::Pointer<Exports>) {
+    let mut ptr = unsafe { imports.as_pointer::<ImportObject>() };
+    let imports = ptr.as_mut();
+    let exports = exports.as_ref();
+
+    imports.register(name, exports.clone());
+}
+
+#[ocaml::func]
+pub fn exports_from_list(exports_list: ocaml::List<(String, ocaml::Raw)>) -> ocaml::Pointer<'static, Exports> {
+    let mut exports = Exports::new();
+
+    for (name, export) in exports_list.into_linked_list() {
+        let export = unsafe { export.as_pointer::<wasmer::Function>() }.as_ref().clone();
+        exports.insert(name, export);
+    }
+
+    ocaml::Pointer::alloc_final(exports, Some(finalizer::<Exports>), None)
+}
+
+#[derive(ocaml::IntoValue, ocaml::FromValue, Clone, Copy)]
+enum Type {
+    I32,
+    I64,
+    F32,
+    F64,
+    V128,
+    ExternRef,
+    FuncRef,
+}
+
+impl Into<wasmer::Type> for Type {
+    fn into(self: Type) -> wasmer::Type {
+        match self {
+            Type::I32 => wasmer::Type::I32,
+            Type::I64 => wasmer::Type::I64,
+            Type::F32 => wasmer::Type::F32,
+            Type::F64 => wasmer::Type::F64,
+            Type::V128 => wasmer::Type::V128,
+            Type::ExternRef => wasmer::Type::ExternRef,
+            Type::FuncRef => wasmer::Type::FuncRef,
+        }
+    }
+}
+
+impl From<wasmer::Type> for Type {
+    fn from(ty: wasmer::Type) -> Self {
+        match ty {
+            wasmer::Type::I32 => Type::I32,
+            wasmer::Type::I64 => Type::I64,
+            wasmer::Type::F32 => Type::F32,
+            wasmer::Type::F64 => Type::F64,
+            wasmer::Type::V128 => Type::V128,
+            wasmer::Type::ExternRef => Type::ExternRef,
+            wasmer::Type::FuncRef => Type::FuncRef,
+        }
+    }
+}
+
+#[derive(wasmer::WasmerEnv, Clone)]
+struct Env { value: ocaml::Raw }
+
+#[ocaml::func]
+pub fn make_function(store: ocaml::Pointer<Store>, signature: (ocaml::List<Type>, ocaml::List<Type>), f: ocaml::Raw) -> ocaml::Pointer<'static, Function> {
+    let signature = {
+        let mut params: Vec<wasmer::Type> = vec![];
+        for ty in signature.0.into_linked_list() {
+            params.push(ty.into())
+        }
+
+        let mut return_type: Vec<wasmer::Type> = vec![];
+        for ty in signature.1.into_linked_list() {
+            return_type.push(ty.into())
+        }
+
+        wasmer::FunctionType::new(params, return_type)
+    };
+
+    let function = Function::new_with_env(store.as_ref(), signature, Env { value: f }, |env: &Env, args| {
+        // TODO: The oficial ocaml-rs docs recomment not to use `recover_handle` outside the scope of tests
+        // need a better way to do this.
+        let gc = unsafe { ocaml::Runtime::recover_handle() };
+
+        let args: ocaml::List<Value> =
+            args
+                .into_iter()
+                .fold(
+                    ocaml::List::empty(),
+                    |list, item| unsafe { list.add(gc, item.into()) }
+                );
+
+        let result = unsafe {
+            env
+                .value
+                .as_value()
+                .call(gc, args)
+                .expect("Could not call OCaml function")
+        };
+
+        let return_value: Vec<wasmer::Value> = {
+            let return_value: ocaml::List<Value> = ocaml::FromValue::from_value(result);
+            let mut ret: Vec<wasmer::Value> = vec![];
+            for value in return_value.into_vec() {
+                ret.push(value.into())
+            }
+
+            ret
+        };
+        
+        Ok(return_value)
+    });
+
+    ocaml::Pointer::alloc_final(function, Some(finalizer::<Function>), None)
 }
