@@ -1,0 +1,16 @@
+┌─────────────────────────┬──────────────┬─────────┬──────────┬──────────┬─────────┐
+│ Name                    │     Time/Run │ mWd/Run │ mjWd/Run │ Prom/Run │ mGC/Run │
+├─────────────────────────┼──────────────┼─────────┼──────────┼──────────┼─────────┤
+│ Add int                 │       2.09ns │         │          │          │         │
+│ Add int64               │       2.08ns │         │          │          │         │
+│ Add float               │       2.08ns │         │          │          │         │
+│ Function call wrapped   │   3_545.39ns │   8.00w │          │          │ 0.03e-3 │
+│ Function call unwrapped │   1_358.49ns │         │          │          │         │
+│ Wrapped build fn        │ 268_027.89ns │ 452.00w │    0.18w │    0.18w │ 1.71e-3 │
+│ Non-wrapped build fn    │ 264_332.72ns │ 130.00w │          │          │ 0.52e-3 │
+│ box_value build fn      │ 269_586.39ns │   4.00w │          │          │ 0.04e-3 │
+│ With alloc              │     134.90ns │  10.00w │          │          │ 0.04e-3 │
+│ Without alloc           │      68.25ns │         │          │          │         │
+│ With alloc abstract ptr │     169.31ns │   2.00w │          │          │         │
+│ Alloc with box value    │       2.38ns │   5.00w │          │          │ 0.02e-3 │
+└─────────────────────────┴──────────────┴─────────┴──────────┴──────────┴─────────┘

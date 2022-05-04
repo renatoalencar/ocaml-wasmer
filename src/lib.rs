@@ -1,5 +1,7 @@
 use std::path::{Path};
 use wasmer::{Store, Module, Instance, Exports, Function, ImportObject};
+use wasmer_compiler_singlepass::Singlepass;
+use wasmer_engine_universal::Universal;
 
 unsafe extern "C" fn finalizer<T>(value: ocaml::Raw) {
     value.as_pointer::<T>().drop_in_place()
@@ -7,7 +9,8 @@ unsafe extern "C" fn finalizer<T>(value: ocaml::Raw) {
 
 #[ocaml::func]
 pub fn make_store_default() -> ocaml::Pointer<Store> {
-    let store = Store::default();
+    let compiler = Singlepass::default();
+    let store = Store::new(&Universal::new(compiler).engine());
     ocaml::Pointer::alloc_final(store, Some(finalizer::<Store>), None)
 }
 
@@ -229,4 +232,59 @@ pub fn make_function(store: ocaml::Pointer<Store>, signature: (ocaml::List<Type>
     });
 
     ocaml::Pointer::alloc_final(function, Some(finalizer::<Function>), None)
+}
+
+/* This should be only used for benchmarking */
+
+#[ocaml::func]
+pub fn __bench_alloc() -> ocaml::Pointer<i64> {
+    let value = 42;
+    ocaml::Pointer::alloc_final(value, None, None)
+}
+
+#[ocaml::func]
+pub fn __bench_alloc_abstract_ptr() -> ocaml::Value {
+    let value = Box::new(42);
+    let ptr: *mut i64 = Box::into_raw(value);
+    unsafe { ocaml::Value::alloc_abstract_ptr(ptr) }
+}
+
+#[ocaml::func]
+pub fn __bench_alloc_box_value() -> ocaml::OCaml<ocaml::interop::DynBox<Box<i64>>> {
+    let value = Box::new(42);
+    ocaml::OCaml::box_value(gc, value)
+}
+
+#[ocaml::func]
+pub fn __bench_no_alloc() -> ocaml::Int {
+    let value = 42;
+    value
+}
+
+#[ocaml::func]
+pub fn __call_for_bench(function: ocaml::Pointer<Function>) {
+    let params = [wasmer::Value::I32(42), wasmer::Value::I32(10)];
+    function.as_ref().call(&params).unwrap();
+}
+
+fn build_function_from_code(code: String, function_name: String) -> Function {
+    let compiler = Singlepass::default();
+    let store = Store::new(&Universal::new(compiler).engine());
+    let module = Module::new(&store, code).expect("Could not create module");
+    let imports = ImportObject::new();
+    let instance = Instance::new(&module, &imports).expect("Could not create instance");
+
+    instance.exports.get_function(&function_name).unwrap().clone()
+}
+
+#[ocaml::func]
+pub fn __function_from_code(code: String, function_name: String) -> ocaml::Pointer<Function> {
+    let function = build_function_from_code(code, function_name);
+    ocaml::Pointer::alloc_final(function, Some(finalizer::<Function>), None)
+}
+
+#[ocaml::func]
+pub fn __function_from_code_box_value(code: String, function_name: String) -> ocaml::OCaml<ocaml::interop::DynBox<Function>> {
+    let function = build_function_from_code(code, function_name);
+    ocaml::OCaml::box_value(gc, function)
 }

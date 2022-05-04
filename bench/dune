@@ -1,0 +1,3 @@
+(executable
+ (name main)
+ (libraries wasmer core_bench))

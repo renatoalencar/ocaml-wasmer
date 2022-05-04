@@ -19,7 +19,7 @@
  (name wasmer)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml dune alcotest)
+ (depends ocaml dune alcotest ppx_bench core_bench)
  (tags
   (topics "to describe" your project)))
 
