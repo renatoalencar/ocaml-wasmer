@@ -9,5 +9,5 @@
  (targets libocaml_wasmer.a)
  (action
   (progn
-    (run cargo build)
-    (run cp %{project_root}/../../target/debug/libocaml_wasmer.a ./))))
+    (run cargo build --release)
+    (run cp %{project_root}/../../target/release/libocaml_wasmer.a ./))))

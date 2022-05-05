@@ -14,3 +14,21 @@
 │ With alloc abstract ptr │     169.31ns │   2.00w │          │          │         │
 │ Alloc with box value    │       2.38ns │   5.00w │          │          │ 0.02e-3 │
 └─────────────────────────┴──────────────┴─────────┴──────────┴──────────┴─────────┘
+
+--- After moving to release mode
+┌─────────────────────────┬─────────────┬─────────┬──────────┬──────────┬─────────┐
+│ Name                    │    Time/Run │ mWd/Run │ mjWd/Run │ Prom/Run │ mGC/Run │
+├─────────────────────────┼─────────────┼─────────┼──────────┼──────────┼─────────┤
+│ Add int                 │      2.06ns │         │          │          │         │
+│ Add int64               │      2.05ns │         │          │          │         │
+│ Add float               │      2.06ns │         │          │          │         │
+│ Function call wrapped   │    443.61ns │   8.00w │          │          │ 0.03e-3 │
+│ Function call unwrapped │    254.79ns │         │          │          │         │
+│ Wrapped build fn        │ 20_923.94ns │ 452.00w │    0.12w │    0.12w │ 1.73e-3 │
+│ Non-wrapped build fn    │ 21_135.86ns │ 130.00w │          │          │ 0.49e-3 │
+│ box_value build fn      │ 22_083.05ns │   4.00w │          │          │ 0.03e-3 │
+│ With alloc              │     17.80ns │  10.00w │          │          │ 0.04e-3 │
+│ Without alloc           │      9.91ns │         │          │          │         │
+│ With alloc abstract ptr │     37.46ns │   2.00w │          │          │         │
+│ Alloc with box value    │      2.39ns │   5.00w │          │          │ 0.02e-3 │
+└─────────────────────────┴─────────────┴─────────┴──────────┴──────────┴─────────┘
